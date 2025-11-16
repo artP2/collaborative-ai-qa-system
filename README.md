@@ -16,7 +16,7 @@ Desenvolver um sistema colaborativo baseado em Recuperação de Informação Aum
 
 - Utilizar LangGraph para modelar o fluxo de interação entre usuários e o agente LLM. (TODO)
 - Implementar pelo menos um nó de ferramenta (ex: busca em PDF, sumarização, votação, etc.). (TODO)
-- Permitir que múltiplos usuários interajam e que suas ações sejam registradas e atribuídas. (TODO)
+- Permitir que múltiplos usuários interajam e que suas ações sejam registradas e atribuídas. ✅
 - O sistema deve contemplar:
   - **Comunicação:** Troca de mensagens entre usuários e agente.
   - **Colaboração:** Construção coletiva de respostas, decisões ou documentos.
@@ -30,6 +30,19 @@ Desenvolver um sistema colaborativo baseado em Recuperação de Informação Aum
 2. Implementar o sistema, integrando LangGraph, LLM e Streamlit.
 3. Documentar o projeto, incluindo o diagrama do grafo e explicações sobre o funcionamento.
 4. Publicar o código em um repositório Git aberto e incluam um README com instruções de uso.
+
+## Registro Colaborativo de Ações
+
+- Cada interação feita na interface Streamlit exige identificação do usuário. As ações são persistidas na coleção `acoes_colaborativas`, incluindo perguntas, uso de ferramentas, resumos salvos e respostas do agente.
+- O histórico consolidado aparece na tela principal em tempo real, exibindo **quem fez o quê**, em qual tópico de conversa e quando.
+- O painel lateral mostra um placar de contribuições por usuário com contagens de perguntas, resumos e uso de ferramentas.
+- Os resumos consolidados continuam sendo salvos na coleção `resumos_conhecimento`, agora também etiquetados com o autor, tópico e horário.
+
+## Tópicos dinâmicos para estudos
+
+- Na barra lateral do Streamlit é possível criar novos tópicos/salas de conversa informando um nome e, opcionalmente, uma descrição.
+- Os tópicos ficam salvos na coleção `topicos_conversa`, permitindo que todos os participantes vejam e reutilizem esses espaços colaborativos.
+- Cada mensagem enviada utiliza o `chat_id` do tópico selecionado, mantendo históricos separados por tema de estudo e simplificando a geração de resumos específicos.
 
 ## Avaliação
 - Clareza e criatividade na modelagem do sistema colaborativo.
