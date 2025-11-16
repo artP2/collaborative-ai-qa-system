@@ -38,6 +38,8 @@ DATABASE_NAME = "qa_system"
 COLLECTION_NAME = "resumos_conhecimento"
 LOG_COLLECTION_NAME = "acoes_colaborativas"
 TOPICS_COLLECTION_NAME = "topicos_conversa"
+CONVERSAS_COLLECTION_NAME = "conversas_colaborativas"
+
 
 # Identificadores auxiliares
 AGENT_SYSTEM_ID = "agente_colaborativo"
@@ -101,6 +103,10 @@ def get_logs_collection():
 
 def get_topics_collection():
     return _get_collection(TOPICS_COLLECTION_NAME)
+
+
+def get_conversas_collection():
+    return _get_collection(CONVERSAS_COLLECTION_NAME)
 
 
 def registrar_acao(acao: str, user_id: str, chat_id: str, conteudo: str, metadata: dict | None = None) -> None:
@@ -266,6 +272,55 @@ def criar_topico(nome: str, user_id: str, descricao: str = "") -> Dict[str, Any]
         return {"ok": True, "topic": documento}
     except Exception as e:
         return {"ok": False, "error": f"Erro ao salvar o tópico: {e}"}
+
+
+def registrar_mensagem_conversa(chat_id: str, role: str, content: str, user_id: str) -> None:
+    collection = get_conversas_collection()
+    if collection is None:
+        return
+
+    try:
+        collection.insert_one({
+            "chat_id": chat_id,
+            "role": role,
+            "content": content,
+            "user_id": user_id,
+            "timestamp": datetime.now(timezone.utc)
+        })
+    except Exception as e:
+        print(f"Erro ao registrar mensagem da conversa: {e}")
+
+
+def get_conversa_compartilhada(chat_id: str, limit: int | None = None) -> List[Dict[str, Any]]:
+    collection = get_conversas_collection()
+    if collection is None:
+        return []
+
+    try:
+        cursor = collection.find({"chat_id": chat_id}).sort("timestamp", 1)
+        if limit:
+            cursor = cursor.limit(limit)
+        return list(cursor)
+    except Exception as e:
+        print(f"Erro ao buscar conversa compartilhada: {e}")
+        return []
+
+
+def _docs_para_messages(registros: List[Dict[str, Any]]) -> List[BaseMessage]:
+    mensagens: List[BaseMessage] = []
+    for registro in registros:
+        role = registro.get("role", "user")
+        content = registro.get("content", "")
+        if role == "assistant":
+            mensagens.append(AIMessage(content=content))
+        else:
+            mensagens.append(HumanMessage(content=content))
+    return mensagens
+
+
+def get_conversa_messages(chat_id: str, limit: int | None = None) -> List[BaseMessage]:
+    registros = get_conversa_compartilhada(chat_id, limit)
+    return _docs_para_messages(registros)
 
 EMBEDDING_MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
 print(f"🔄 Carregando modelo de embeddings: {EMBEDDING_MODEL_NAME}")
@@ -726,9 +781,12 @@ def run_agent(
     registrar_acao("pergunta", user_id, chat_id, user_input)
 
     if conversation_history is None:
-        conversation_history = []
+        conversation_history = get_conversa_messages(chat_id)
+    else:
+        conversation_history = list(conversation_history)
 
     conversation_history.append(HumanMessage(content=user_input))
+    registrar_mensagem_conversa(chat_id, "user", user_input, user_id)
 
     initial_state = {
         "messages": conversation_history,
@@ -765,6 +823,7 @@ def run_agent(
         resposta_texto,
         {"destinatario": user_id}
     )
+    registrar_mensagem_conversa(chat_id, "assistant", resposta_texto, AGENT_SYSTEM_ID)
     
     return {
         "response": resposta_texto,
@@ -854,3 +913,14 @@ def get_historico_colaborativo(limit: int = 10) -> list:
     except Exception as e:
         print(f"Erro ao buscar histórico: {e}")
         return []
+
+
+__all__ = [
+    "run_agent",
+    "get_estatisticas_usuarios",
+    "get_historico_colaborativo",
+    "AGENT_SYSTEM_ID",
+    "get_topicos_disponiveis",
+    "criar_topico",
+    "get_conversa_compartilhada",
+]

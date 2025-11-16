@@ -3,12 +3,11 @@ from datetime import datetime
 from agent import (
     run_agent,
     get_estatisticas_usuarios,
-    get_historico_colaborativo,
     AGENT_SYSTEM_ID,
     get_topicos_disponiveis,
     criar_topico,
+    get_conversa_compartilhada,
 )
-from langchain_core.messages import HumanMessage, AIMessage
 
 # --- Configuração da Página ---
 st.set_page_config(
@@ -22,23 +21,6 @@ def _format_timestamp(value):
     if isinstance(value, datetime):
         return value.astimezone().strftime("%d/%m %H:%M")
     return "--:--"
-
-
-def _format_action_description(entry: dict) -> str:
-    tipo = entry.get("type", "acao")
-    content = entry.get("content", "").strip()
-    content_preview = (content[:160] + "…") if len(content) > 160 else content
-    if tipo == "pergunta":
-        return f"perguntou: {content_preview}"
-    if tipo == "resposta":
-        return f"respondeu: {content_preview}"
-    if tipo == "resumo":
-        tema = entry.get("metadata", {}).get("tema", "resumo")
-        return f"salvou o resumo '{tema}'"
-    if tipo.startswith("ferramenta_"):
-        ferramenta = tipo.replace("ferramenta_", "").replace("_", " ")
-        return f"usou a ferramenta {ferramenta}"
-    return content_preview or tipo
 
 
 def _is_retry_placeholder(text: str) -> bool:
@@ -118,14 +100,6 @@ if st.session_state.user_id is None:
 st.title("🤖 Agente de Conhecimento Colaborativo")
 st.caption(f"👤 **Logado como:** {st.session_state.user_id} | Eu aprendo com nossa conversa. Use o menu lateral para salvar um resumo.")
 
-# --- Inicialização do Histórico (Memória do Streamlit) ---
-# Usamos st.session_state para manter o histórico da conversa
-# mesmo quando o Streamlit atualiza a página
-if "lc_history" not in st.session_state:
-    # 'lc_history' agora é um DICIONÁRIO
-    # Cada chave é um 'chat_id', e o valor é a lista de mensagens
-    st.session_state.lc_history = {}
-
 # Inicializa o chat_id se não existir
 if "chat_id" not in st.session_state:
     st.session_state.chat_id = "geral" # Tópico padrão
@@ -177,6 +151,9 @@ with st.sidebar:
     # Se o usuário mudar a seleção, atualizamos o chat_id e recarregamos a página
     if chat_id_selecionado != st.session_state.chat_id:
         st.session_state.chat_id = chat_id_selecionado
+        st.rerun()
+
+    if st.button("🔄 Atualizar conversa", use_container_width=True):
         st.rerun()
 
     # Exibe detalhes do tópico atual
@@ -247,13 +224,9 @@ with st.sidebar:
                 # Chama o agente com o user_id e o chat_id atual
                 resultado = run_agent(
                     prompt_resumo, 
-                    st.session_state.lc_history.get(st.session_state.chat_id, []), 
                     st.session_state.user_id,
                     st.session_state.chat_id
                 )
-                
-                # Atualiza o histórico do chat específico com o resultado
-                st.session_state.lc_history[st.session_state.chat_id] = resultado["history"]
                 
                 st.success(f"Resumo sobre '{tema_resumo}' salvo no banco!")
                 st.balloons()
@@ -262,16 +235,27 @@ with st.sidebar:
 
 # --- Lógica Principal do Chat ---
 
-# Pega o histórico do chat ATUAL
-current_history = st.session_state.lc_history.get(st.session_state.chat_id, [])
+conversa_docs = get_conversa_compartilhada(st.session_state.chat_id)
 
-# 1. Exibe o histórico de mensagens do chat selecionado
-for msg in current_history:
-    if isinstance(msg, HumanMessage):
-        st.chat_message("user").write(msg.content)
-    elif isinstance(msg, AIMessage):
-        if _should_show_ai_text(msg.content): 
-            st.chat_message("assistant").write(msg.content)
+if conversa_docs:
+    for registro in conversa_docs:
+        role = registro.get("role", "user")
+        content = registro.get("content", "")
+        autor = registro.get("user_id") or "Usuário"
+        timestamp = _format_timestamp(registro.get("timestamp"))
+
+        if role == "assistant":
+            if _should_show_ai_text(content):
+                msg_box = st.chat_message("assistant")
+                msg_box.write(content)
+                if timestamp:
+                    msg_box.caption(f"🕒 {timestamp}")
+        else:
+            msg_box = st.chat_message("user")
+            msg_box.write(content)
+            msg_box.caption(f"👤 {autor} · 🕒 {timestamp}")
+else:
+    st.info("Ainda não há mensagens neste tópico. Inicie a conversa!")
 
 # 2. Aguarda um novo input do usuário
 if user_input := st.chat_input(f"Sua mensagem em '{topicos_nomes.get(st.session_state.chat_id, st.session_state.chat_id)}'"):
@@ -282,13 +266,10 @@ if user_input := st.chat_input(f"Sua mensagem em '{topicos_nomes.get(st.session_
         # 3. Chama o "cérebro" (run_agent) com o user_id e o chat_id
         resultado = run_agent(
             user_input, 
-            current_history, # Passa o histórico do chat atual
+            None,
             st.session_state.user_id,
             st.session_state.chat_id # Passa o ID do chat
         )
-        
-        # 4. Atualiza o histórico do chat específico no session_state
-        st.session_state.lc_history[st.session_state.chat_id] = resultado["history"]
 
     # 5. Exibe a resposta final do agente
     if _should_show_ai_text(resultado["response"]):
