@@ -100,3 +100,10 @@ streamlit run front.py
 ```
 
 O Streamlit abrirá a aplicação no seu navegador, pronta para ser usada. Na primeira execução, o `agent.py` baixará o modelo de embeddings, o que pode levar alguns minutos.
+
+# Integrantes do grupo
+- Albert Katayama Shoji - 13695358
+- Leonardo Ishida - 12873424
+- Arthur Pin - 12691964
+- Diego Cabral Morales - 13672193
+
