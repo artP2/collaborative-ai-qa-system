@@ -165,6 +165,11 @@ with st.sidebar:
         if origem and origem != "sistema":
             st.caption(f"👤 Criado por {origem}")
 
+    if st.session_state.get("reset_novo_topico_form"):
+        st.session_state["novo_topico_nome"] = ""
+        st.session_state["novo_topico_desc"] = ""
+        st.session_state["reset_novo_topico_form"] = False
+
     st.markdown("**Crie novos tópicos para estudos específicos:**")
     novo_topico_nome = st.text_input("Nome do novo tópico", key="novo_topico_nome")
     novo_topico_desc = st.text_area("Descrição (opcional)", key="novo_topico_desc", height=80)
@@ -174,8 +179,7 @@ with st.sidebar:
             if resultado_topico.get("ok"):
                 novo_chat_id = resultado_topico["topic"]["chat_id"]
                 st.session_state.chat_id = novo_chat_id
-                st.session_state.novo_topico_nome = ""
-                st.session_state.novo_topico_desc = ""
+                st.session_state["reset_novo_topico_form"] = True
                 st.success(f"Tópico '{resultado_topico['topic']['name']}' criado com sucesso!")
                 st.rerun()
             else:
@@ -223,7 +227,8 @@ with st.sidebar:
                 
                 # Chama o agente com o user_id e o chat_id atual
                 resultado = run_agent(
-                    prompt_resumo, 
+                    prompt_resumo,
+                    None,
                     st.session_state.user_id,
                     st.session_state.chat_id
                 )
